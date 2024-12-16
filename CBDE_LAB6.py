@@ -6,7 +6,7 @@ from neo4j import GraphDatabase
 DATABASE_SIZE = 100
 
 def generate_data(size):
-    # Opciones base para generar valores aleatorios
+    # Opciones para los datos
     brands = ["Sony", "Samsung", "LG", "Panasonic", "Philips", "Toshiba", "Sharp", "Vizio", "Hisense", "TCL"]
     addresses = ["Seoul", "Tokyo", "New York", "Los Angeles", "San Francisco", "Houston", "Miami", "Boston", "Chicago", "Dallas"]
     nations = ["South Korea", "Japan", "United States", "Canada", "Mexico", "Brazil", "Argentina", "Chile", "Colombia", "Peru"]
@@ -16,7 +16,7 @@ def generate_data(size):
     mktsegments = ["Electronics", "Home Appliances", "Mobile Devices", "Computers", "Audio", "Video", "Wearables", "Accessories", "Gaming", "Networking"]
     flags = ["Yes", "No"]
 
-    # Generación dinámica de datos
+    # Generación random de datos
     data = {
         "key": [str(10 + i) for i in range(size)],
         "brand": [random.choice(brands) for _ in range(size)],
@@ -30,10 +30,9 @@ def generate_data(size):
     }
     return data
 
-# Ejemplo: Generar 30 elementos
 data = generate_data(DATABASE_SIZE)
 
-# DATABASE
+# Crear database
 def create_database(session):
     session.run("MATCH (n) DETACH DELETE n")  # drop database
 
@@ -50,14 +49,12 @@ def create_database(session):
 
     create_relationships(session)
 
-
+# Índices
 def create_indexes(session):
-    # Índices
-    session.run("CREATE INDEX IF NOT EXISTS FOR (li:Lineitem) ON (li.l_shipdate)")
-    session.run("CREATE INDEX IF NOT EXISTS FOR (ps:PartSupp) ON (ps.ps_supplycost)")
-    session.run("CREATE INDEX IF NOT EXISTS FOR (o:Order) ON (o.o_orderdate)")
-    session.run("CREATE INDEX IF NOT EXISTS FOR (p:Part) ON (p.p_size, p.p_type)")
     session.run("CREATE INDEX IF NOT EXISTS FOR (r:Region) ON (r.r_name)")
+    session.run("CREATE INDEX IF NOT EXISTS FOR (o:Order) ON (o.o_orderdate)")
+    session.run("CREATE INDEX IF NOT EXISTS FOR (li:Lineitem) ON (li.l_shipdate)")
+    session.run("CREATE INDEX IF NOT EXISTS FOR (p:Part) ON (p.p_size, p.p_type)")
 
 
 # Nodos gen
@@ -65,7 +62,7 @@ def create_nodes(session, label, query_func):
     for i in range(len(data["key"])):
         session.run(query_func(i))
 
-# Reaciones
+# Relaciones
 def create_relationships(session):
     for i in range(len(data["key"])):
         session.run(create_part_partsupp_rel_query(i))
@@ -127,8 +124,6 @@ def create_customer_query(i):
 def create_lineitem_query(i):
     return f"CREATE (lineitem{data['key'][i]}: Lineitem{{l_linenumber: {data['key'][i]}, l_quantity: {random.randint(0, 100)}, l_extendedprice: {random.randint(0, 200)}, l_discount: {random.randint(0, 99)}, l_tax: {random.randint(0, 20)}, l_returnflag: '{random.choice(data['flag'])}', l_linestatus: '{random.choice(data['flag'])}', l_shipdate: '{random.choice(data['date'])}', l_commitdate: '{random.choice(data['date'])}', l_receiptdate: '{random.choice(data['date'])}', l_shipinstruct: 'Ok{data['key'][i]}', l_shipmode: 'Ok{data['key'][i]}', l_comment: 'OK'}})"
 
-
-
 # Query 1
 def query1(session, date):
     return session.run(
@@ -183,6 +178,7 @@ def query3(session, segment, date1, date2):
         {"segment": segment, "date1": date1, "date2": date2}
     )
 
+# Query 4
 def query4(session, region, date):
     start_date = datetime.strptime(date, "%Y-%m-%d")
     end_date = start_date + timedelta(days=365)
