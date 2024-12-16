@@ -35,7 +35,7 @@ data = generate_data(DATABASE_SIZE)
 
 # DATABASE
 def create_database(session):
-    session.run("MATCH (n) DETACH DELETE n")  # drop all data in the database
+    session.run("MATCH (n) DETACH DELETE n")  # drop database
 
     create_indexes(session)
 
@@ -60,12 +60,12 @@ def create_indexes(session):
     session.run("CREATE INDEX IF NOT EXISTS FOR (r:Region) ON (r.r_name)")
 
 
-# GENERIC NODE CREATION
+# Nodos gen
 def create_nodes(session, label, query_func):
     for i in range(len(data["key"])):
         session.run(query_func(i))
 
-# RELATIONSHIPS
+# Reaciones
 def create_relationships(session):
     for i in range(len(data["key"])):
         session.run(create_part_partsupp_rel_query(i))
@@ -77,7 +77,7 @@ def create_relationships(session):
         session.run(create_order_lineitem_rel_query(i))
         session.run(create_lineitem_partsupp_rel_query(i))
 
-# RELATIONSHIP QUERIES
+# Queries relaciones
 def create_part_partsupp_rel_query(i):
     return f"MATCH (p:Part{{p_partkey: {data['key'][i]}}}), (ps:PartSupp{{ps_partkey: {data['key'][i]}}}) CREATE (p)-[:HAS_PARTSUPP]->(ps)"
 
@@ -102,7 +102,7 @@ def create_order_lineitem_rel_query(i):
 def create_lineitem_partsupp_rel_query(i):
     return f"MATCH (l:Lineitem{{l_linenumber: {data['key'][i]}}}), (ps:PartSupp{{ps_partkey: {data['key'][i]}}}) CREATE (l)-[:INCLUDES]->(ps)"
 
-# QUERIES
+# Queries nodos
 def create_part_query(i):
     return f"CREATE (part{data['key'][i]}: Part{{p_partkey: {data['key'][i]}, p_name: 'Partkey{data['key'][i]}', p_mfgr: 'ABCDEFG', p_brand: '{data['brand'][i]}', p_type: 'Running', p_size: {random.randint(38, 45)}, p_container: 'Container{data['key'][i]}', p_retailprice: {float(random.randint(1000, 5000) / 100)}, p_comment: 'OK'}})"
 
@@ -113,14 +113,10 @@ def create_partsupp_query(i):
     return f"CREATE (partsupp{data['key'][i]}: PartSupp{{ps_partkey: {data['key'][i]}, ps_suppkey: {data['key'][i]}, ps_availqty: {random.randint(100, 500)}, ps_supplycost: {float(random.randint(100, 500) / 100)}, ps_comment: 'OK'}})"
 
 def create_nation_query(i):
-    if i < len(data["nation"]):
-        return f"CREATE (nation{data['key'][i]}: Nation{{n_nationkey: {data['key'][i]}, n_name: '{data['nation'][i]}', n_comment: 'OK'}})"
-    return ""
+    return f"CREATE (nation{data['key'][i]}: Nation{{n_nationkey: {data['key'][i]}, n_name: '{data['nation'][i]}', n_comment: 'OK'}})"
 
 def create_region_query(i):
-    if i < len(data["region"]):
-        return f"CREATE (region{data['key'][i]}: Region{{r_regionkey: {data['key'][i]}, r_name: '{data['region'][i]}', r_comment: 'OK'}})"
-    return ""
+    return f"CREATE (region{data['key'][i]}: Region{{r_regionkey: {data['key'][i]}, r_name: '{data['region'][i]}', r_comment: 'OK'}})"
 
 def create_order_query(i):
     return f"CREATE (order{data['key'][i]}: Order{{o_orderkey: {data['key'][i]}, o_orderstatus: 'OK', o_totalprice: {random.randint(0, 1000)}, o_orderdate: '{random.choice(data['date'])}', o_orderpriority: '{random.choice(data['priority'])}', o_clerk: 'Louis', o_shippriority: '{random.choice(data['priority'])}', o_comment: 'OK'}})"
@@ -195,21 +191,15 @@ def query4(session, region, date):
 
     return session.run(
         """
-        MATCH (r:Region)<-[:PART_OF]-(n:Nation)<-[:LOCATED_IN]-(s:Supplier)
-              <-[:SUPPLIED_BY]-(ps:PartSupp)<-[:INCLUDES]-(l:Lineitem)<-[:CONTAINS]-(o:Order)-[:PLACED]->(c:Customer)
-        WHERE r.r_name = $region
-          AND o.o_orderdate >= date($start_date)
-          AND o.o_orderdate < date($end_date)
-        WITH n.n_name AS nation_name, 
-             SUM(l.l_extendedprice * (1 - l.l_discount)) AS revenue
-        RETURN nation_name, revenue
+        MATCH (c:Customer)-[:RESIDES_IN]->(n:Nation)-[:PART_OF]->(r:Region),
+              (c)-[:PLACED]->(o:Order)-[:CONTAINS]->(li:Lineitem)-[:INCLUDES]->(ps:PartSupp)-[:SUPPLIED_BY]->(s:Supplier)
+        WHERE o.o_orderdate >= $date1 AND o.o_orderdate < $date2 AND r.r_name = $region
+        RETURN n.n_name AS n_name, sum(li.l_extendedprice * (1 - li.l_discount)) AS revenue
         ORDER BY revenue DESC
         """,
-        {"region": region, "start_date": start_date_str, "end_date": end_date_str}
+        {"date1": start_date_str, "date2": end_date_str, "region": region}
     )
 
-
-# MAIN
 def main():
     uri = "bolt://localhost:7687"
     user = "neo4j"
@@ -219,7 +209,6 @@ def main():
         create_database(session)
         print("Database created successfully")
         
-        # Call query1
         print("\nQuery 1:")
         result = query1(session, "2021-12-31")
         for record in result:
